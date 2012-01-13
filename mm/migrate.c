@@ -245,6 +245,55 @@ static int is_failed_page(struct page *page, int pass, int tries)
 #define is_failed_page(page, pass, tries)	0
 #endif
 
+#ifdef CONFIG_BLOCK
+/* Returns true if all buffers are successfully locked */
+static bool buffer_migrate_lock_buffers(struct buffer_head *head, bool sync)
+{
+	struct buffer_head *bh = head;
+
+	/* Simple case, sync compaction */
+	if (sync) {
+		do {
+			get_bh(bh);
+			lock_buffer(bh);
+			bh = bh->b_this_page;
+
+		} while (bh != head);
+
+		return true;
+	}
+
+	/* async case, we cannot block on lock_buffer so use trylock_buffer */
+	do {
+		get_bh(bh);
+		if (!trylock_buffer(bh)) {
+			/*
+			 * We failed to lock the buffer and cannot stall in
+			 * async migration. Release the taken locks
+			 */
+			struct buffer_head *failed_bh = bh;
+			put_bh(failed_bh);
+			bh = head;
+			while (bh != failed_bh) {
+				unlock_buffer(bh);
+				put_bh(bh);
+				bh = bh->b_this_page;
+			}
+			return false;
+		}
+
+		bh = bh->b_this_page;
+	} while (bh != head);
+	return true;
+}
+#else
+static inline bool buffer_migrate_lock_buffers(struct buffer_head *head,
+								bool sync)
+{
+	return true;
+}
+#endif /* CONFIG_BLOCK */
+
 /*
  * Replace the page in the mapping.
  *
@@ -255,7 +304,7 @@ static int is_failed_page(struct page *page, int pass, int tries)
  */
 static int migrate_page_move_mapping(struct address_space *mapping,
 		struct page *newpage, struct page *page,
-		int pass, int tries)
+		int pass, int tries, struct buffer_head *head, bool sync)
 {
 	int expected_count;
 	void **pslot;
@@ -295,6 +344,19 @@ static int migrate_page_move_mapping(struct address_space *mapping,
 			printk("%s[%d]: 3 ", __func__, __LINE__);
 			dump_page(page);
 		}
+		return -EAGAIN;
+	}
+
+	/*
+	 * In the async migration case of moving a page with buffers, lock the
+	 * buffers using trylock before the mapping is moved. If the mapping
+	 * was moved, we later failed to lock the buffers and could not move
+	 * the mapping back due to an elevated page count, we would have to
+	 * block waiting on other references to be dropped.
+	 */
+	if (!sync && head && !buffer_migrate_lock_buffers(head, sync)) {
+		page_unfreeze_refs(page, expected_count);
+		spin_unlock_irq(&mapping->tree_lock);
 		return -EAGAIN;
 	}
 
@@ -454,15 +516,15 @@ EXPORT_SYMBOL(fail_migrate_page);
  *
  * Pages are locked upon entry and exit.
  */
-static int __migrate_page(struct address_space *mapping,
+int __migrate_page(struct address_space *mapping,
 		struct page *newpage, struct page *page,
-		int pass, int tries)
+		int pass, int tries, bool sync)
 {
 	int rc;
 
 	BUG_ON(PageWriteback(page));	/* Writeback must be complete */
 
-	rc = migrate_page_move_mapping(mapping, newpage, page, pass, tries);
+	rc = migrate_page_move_mapping(mapping, newpage, page, pass, tries, NULL, sync);
 
 	if (rc) {
 		if (is_failed_page(page, pass, tries)) {
@@ -477,9 +539,9 @@ static int __migrate_page(struct address_space *mapping,
 }
 
 int migrate_page(struct address_space *mapping,
-		struct page *newpage, struct page *page)
+		struct page *newpage, struct page *page, bool sync)
 {
-	return __migrate_page(mapping, newpage, page, 0, 0);
+	return __migrate_page(mapping, newpage, page, 0, 0, sync);
 }
 EXPORT_SYMBOL(migrate_page);
 
@@ -490,28 +552,28 @@ EXPORT_SYMBOL(migrate_page);
  * exist.
  */
 int buffer_migrate_page(struct address_space *mapping,
-		struct page *newpage, struct page *page)
+		struct page *newpage, struct page *page, bool sync)
 {
 	struct buffer_head *bh, *head;
 	int rc;
 
 	if (!page_has_buffers(page))
-		return migrate_page(mapping, newpage, page);
+		return migrate_page(mapping, newpage, page, sync);
 
 	head = page_buffers(page);
 
-	rc = migrate_page_move_mapping(mapping, newpage, page, 0, 0);
+	rc = migrate_page_move_mapping(mapping, newpage, page, 0, 0, head, sync);
 
 	if (rc)
 		return rc;
 
-	bh = head;
-	do {
-		get_bh(bh);
-		lock_buffer(bh);
-		bh = bh->b_this_page;
-
-	} while (bh != head);
+	/*
+	 * In the async case, migrate_page_move_mapping locked the buffers
+	 * with an IRQ-safe spinlock held. In the sync case, the buffers
+	 * need to be locked now
+	 */
+	if (sync)
+		BUG_ON(!buffer_migrate_lock_buffers(head, sync));
 
 	ClearPagePrivate(page);
 	set_page_private(newpage, page_private(page));
@@ -588,7 +650,7 @@ static int writeout(struct address_space *mapping, struct page *page)
  * Default handling if a filesystem does not provide a migration function.
  */
 static int fallback_migrate_page(struct address_space *mapping,
-	struct page *newpage, struct page *page, int pass, int tries)
+	struct page *newpage, struct page *page, int pass, int tries, bool sync)
 {
 	int rc;
 
@@ -614,7 +676,7 @@ static int fallback_migrate_page(struct address_space *mapping,
 		return -EAGAIN;
 	}
 
-	rc = __migrate_page(mapping, newpage, page, pass, tries);
+	rc = __migrate_page(mapping, newpage, page, pass, tries, sync);
 	if (rc) {
 		if (is_failed_page(page, pass, tries)) {
 			printk("%s[%d] 3 ", __func__, __LINE__);
@@ -658,7 +720,7 @@ static int move_to_new_page(struct page *newpage, struct page *page,
 
 	mapping = page_mapping(page);
 	if (!mapping) {
-		rc = __migrate_page(mapping, newpage, page, pass, tries);
+		rc = __migrate_page(mapping, newpage, page, pass, tries, sync);
 		if (rc) {
 			if (is_failed_page(page, pass, tries)) {
 				printk("%s[%d]: 1 ", __func__, __LINE__);
@@ -667,9 +729,10 @@ static int move_to_new_page(struct page *newpage, struct page *page,
 		}
 	} else {
 		/*
-		 * Do not writeback pages if !sync and migratepage is
-		 * not pointing to migrate_page() which is nonblocking
-		 * (swapcache/tmpfs uses migratepage = migrate_page).
+		 * Most pages have a mapping and most filesystems provide a
+		 * migratepage callback. Anonymous pages are part of swap
+		 * space which also has its own migratepage callback. This
+		 * is the most common path for page migration.
 		 */
 		if (PageDirty(page) && !sync &&
 		    mapping->a_ops->migratepage != migrate_page) {
@@ -690,7 +753,7 @@ static int move_to_new_page(struct page *newpage, struct page *page,
 			 * path for page migration.
 			 */
 			rc = mapping->a_ops->migratepage(mapping,
-							newpage, page);
+							newpage, page, sync);
 			if (rc) {
 				if (is_failed_page(page, pass, tries)) {
 					printk(KERN_ERR "%s[%d]: 3 ",
@@ -700,7 +763,7 @@ static int move_to_new_page(struct page *newpage, struct page *page,
 			}
 		} else	{
 			rc = fallback_migrate_page(mapping, newpage, page,
-							 pass, tries);
+							 pass, tries, sync);
 			if (rc) {
 				if (is_failed_page(page, pass, tries)) {
 					printk(KERN_ERR "%s[%d]: 4 ",
@@ -908,7 +971,8 @@ out:
  * to the newly allocated page in newpage.
  */
 static int unmap_and_move(new_page_t get_new_page, unsigned long private,
-			struct page *page, int force, bool offlining, bool sync)
+			struct page *page, int force, bool offlining, bool sync,
+			int pass, int tries)
 {
 	int rc = 0;
 	int *result = NULL;
@@ -926,7 +990,7 @@ static int unmap_and_move(new_page_t get_new_page, unsigned long private,
 		if (unlikely(split_huge_page(page)))
 			goto out;
 
-	rc = __unmap_and_move(page, newpage, force, offlining, sync);
+	rc = __unmap_and_move(page, newpage, force, offlining, sync, pass, tries);
 out:
 	if (rc != -EAGAIN) {
 		/*
