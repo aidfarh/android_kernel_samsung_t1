@@ -253,17 +253,18 @@ static void smb136_set_charging_state(struct smb_charger_callbacks *ptr,
 		break;
 
 	case CABLE_TYPE_USB:
-		/* Prevent in-rush current */
 		dev_info(&chg->client->dev,
-				"%s: set charger current USB & Default\n",
+				"%s: set charger current TA\n",
 				__func__);
-
-		/* USBIN 500mA mode */
-		data = 0x88;
+		/* HC mode */
+		data = 0x8c;
 		smb136_i2c_write(chg->client, SMB_CommandA, data);
 
-		/* Set charge current to 500mA */
-		data = 0x14;
+		/* Set charge current */
+		/* Over HW Rev 09 : 1.5A, else 1.3A */
+		data = 0xF4;
+		if (chg->pdata->hw_revision < 0x9)
+			data = 0xD4;
 		smb136_i2c_write(chg->client, SMB_ChargeCurrent, data);
 		break;
 
