@@ -31,6 +31,10 @@
 #include <linux/battery.h>
 #include <linux/irq.h>
 
+#ifdef CONFIG_FORCE_FAST_CHARGE
+#include <linux/fastchg.h>
+#endif
+
 #include "board-espresso.h"
 #include "mux.h"
 #include "omap_muxtbl.h"
@@ -245,10 +249,16 @@ static int check_charger_type(void)
 	short adc;
 
 	adc = omap4_espresso_get_adc(ADC_CHECK_1);
+
+#ifdef CONFIG_FORCE_FAST_CHARGE
+	cable_type = adc > CABLE_DETECT_VALUE ?
+			CABLE_TYPE_AC :
+			((force_fast_charge != 0) ? CABLE_TYPE_AC : CABLE_TYPE_USB);
+#else
 	cable_type = adc > CABLE_DETECT_VALUE ?
 			CABLE_TYPE_AC :
 			CABLE_TYPE_USB;
-
+#endif
 	pr_info("%s : Charger type is [%s], adc=%d\n",
 		__func__,
 		cable_type == CABLE_TYPE_AC ? "TA" : "USB",
