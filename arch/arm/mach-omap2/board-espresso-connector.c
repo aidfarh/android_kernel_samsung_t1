@@ -39,10 +39,6 @@
 #include <linux/host_notify.h>
 #endif
 
-#ifdef CONFIG_FORCE_FAST_CHARGE
-#include <linux/fastchg.h>
-#endif
-
 #include <plat/usb.h>
 
 #include "board-espresso.h"
@@ -353,16 +349,7 @@ static void espresso_ap_usb_attach(struct omap4_otg *otg)
 
 	otg->otg.default_a = false;
 	otg->otg.state = OTG_STATE_B_IDLE;
-
-
-#ifdef CONFIG_FORCE_FAST_CHARGE
-	pr_info("%s, Forcing USB_EVENT_CHARGER for Fast Charge\n", __func__);
-    otg->otg.last_event = (force_fast_charge != 0) ? USB_EVENT_CHARGER : USB_EVENT_VBUS;
-#else
-
 	otg->otg.last_event = USB_EVENT_VBUS;
-
-#endif
 
 	atomic_notifier_call_chain(&otg->otg.notifier,
 			USB_EVENT_VBUS,
