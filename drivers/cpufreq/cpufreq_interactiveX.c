@@ -90,7 +90,7 @@ static unsigned long timer_rate;
 static int cpufreq_governor_interactivex(struct cpufreq_policy *policy,
 		unsigned int event);
 
-#ifndef CONFIG_CPU_FREQ_DEFAULT_GOV_INTERACTIVE
+#ifndef CONFIG_CPU_FREQ_DEFAULT_GOV_INTERACTIVEX
 static
 #endif
 struct cpufreq_governor cpufreq_gov_interactivex = {
@@ -753,7 +753,7 @@ err_freeuptask:
 	return -ENOMEM;
 }
 
-#ifdef CONFIG_CPU_FREQ_DEFAULT_GOV_INTERACTIVE
+#ifdef CONFIG_CPU_FREQ_DEFAULT_GOV_INTERACTIVEX
 fs_initcall(cpufreq_interactivex_init);
 #else
 module_init(cpufreq_interactivex_init);
@@ -770,6 +770,6 @@ static void __exit cpufreq_interactivex_exit(void)
 module_exit(cpufreq_interactivex_exit);
 
 MODULE_AUTHOR("Mike Chan <mike@android.com>");
-MODULE_DESCRIPTION("'cpufreq_interactive' - A cpufreq governor for "
+MODULE_DESCRIPTION("'cpufreq_interactivex' - A cpufreq governor for "
 	"Latency sensitive workloads");
 MODULE_LICENSE("GPL");
