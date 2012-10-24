@@ -2973,6 +2973,8 @@ wl_cfg80211_connect(struct wiphy *wiphy, struct net_device *dev,
 	bzero(&bssid, sizeof(bssid));
 	if (!wl_get_drv_status(wl, DISCONNECTING, dev))
 		wl_update_prof(wl, dev, NULL, (void *)&bssid, WL_PROF_BSSID);
+	wl_update_prof(wl, dev, NULL, (void *)&bssid, WL_PROF_BSSID);
+	wl_update_prof(wl, dev, NULL, sme->bssid, WL_PROF_PENDING_BSSID);
 
 	if (p2p_is_on(wl) && (dev != wl_to_prmry_ndev(wl))) {
 		/* we only allow to connect using virtual interface in case of P2P */
@@ -6732,7 +6734,7 @@ wl_notify_connect_status(struct wl_priv *wl, struct net_device *ndev,
 				complete(&wl->iface_disable);
 
 		} else if (wl_is_nonetwork(wl, e)) {
-			printk("connect failed event=%d e->status %d e->reason %d \n",
+			printk("connect failed event=%d e->status %d e->reason %d\n",
 				event, (int)ntoh32(e->status), (int)ntoh32(e->reason));
 			/* Clean up any pending scan request */
 			if (wl->scan_request) {
@@ -7073,6 +7075,7 @@ wl_bss_connect_done(struct wl_priv *wl, struct net_device *ndev,
 			completed ? WLAN_STATUS_SUCCESS :
 			(sec->auth_assoc_res_status) ?
 			sec->auth_assoc_res_status :
+			(e->reason) ? ntoh32(e->reason) :
 			WLAN_STATUS_UNSPECIFIED_FAILURE,
 			GFP_KERNEL);
 		if (completed)
@@ -9702,6 +9705,9 @@ static void *wl_read_prof(struct wl_priv *wl, struct net_device *ndev, s32 item)
 	case WL_PROF_BSSID:
 		rptr = profile->bssid;
 		break;
+	case WL_PROF_PENDING_BSSID:
+		rptr = profile->pending_bssid;
+		break;
 	case WL_PROF_SSID:
 		rptr = &profile->ssid;
 		break;
@@ -9740,6 +9746,12 @@ wl_update_prof(struct wl_priv *wl, struct net_device *ndev,
 			memcpy(profile->bssid, data, ETHER_ADDR_LEN);
 		else
 			memset(profile->bssid, 0, ETHER_ADDR_LEN);
+		break;
+	case WL_PROF_PENDING_BSSID:
+		if (data)
+			memcpy(profile->pending_bssid, data, ETHER_ADDR_LEN);
+		else
+			memset(profile->pending_bssid, 0, ETHER_ADDR_LEN);
 		break;
 	case WL_PROF_SEC:
 		memcpy(&profile->sec, data, sizeof(profile->sec));

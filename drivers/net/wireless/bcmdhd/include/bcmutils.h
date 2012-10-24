@@ -642,6 +642,8 @@ extern void *_bcmutils_dummy_fn;
 #define CRC32_INIT_VALUE 0xffffffff	
 #define CRC32_GOOD_VALUE 0xdebb20e3	
 
+#define MACDBG "%02x:%02x:%02x:%02x:%02x:%02x"
+#define MAC2STRDBG(ea) (ea)[0], (ea)[1], (ea)[2], (ea)[3], (ea)[4], (ea)[5]
 
 #define MACF				"%02x:%02x:%02x:%02x:%02x:%02x"
 #define ETHERP_TO_MACF(ea)	((struct ether_addr *) (ea))->octet[0], \
