@@ -130,8 +130,21 @@ config CPU_FREQ_DEFAULT_GOV_INTERACTIVEX
   	help
     	  Use the CPUFreq governor 'interactiveX' as default.
 
+config CPU_FREQ_DEFAULT_GOV_SMARTASS2
+	bool "smartass2"
+	select CPU_FREQ_GOV_SMARTASS2
+	help
+	  Use the CPUFreq governor 'smartassV2' as default.
+
 endchoice
 
+
+config CPU_FREQ_GOV_SMARTASS2
+	tristate "'smartassV2' cpufreq governor"
+	depends on CPU_FREQ
+	help
+	  'smartassV2' - a "smart" governor
+	  If in doubt, say N.
 
 config CPU_FREQ_GOV_INTERACTIVEX
 	tristate "'interactiveX' cpufreq governor"
@@ -236,11 +249,6 @@ config CPU_FREQ_GOV_CONSERVATIVE
 
 	  If in doubt, say N.
 
-menu "x86 CPU frequency scaling drivers"
-depends on X86
-source "drivers/cpufreq/Kconfig.x86"
-endmenu
-
 config CPU_FREQ_GOV_HOTPLUG
 	tristate "'hotplug' cpufreq governor"
 	depends on CPU_FREQ && NO_HZ && HOTPLUG_CPU
@@ -260,6 +268,11 @@ config CPU_FREQ_GOV_HOTPLUG
 	  'ondemand' instead.
 
 	  If in doubt, say N.
+
+menu "x86 CPU frequency scaling drivers"
+depends on X86
+source "drivers/cpufreq/Kconfig.x86"
+endmenu
 
 endif
 endmenu
