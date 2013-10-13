@@ -1741,6 +1741,50 @@ no_policy:
 }
 EXPORT_SYMBOL(cpufreq_update_policy);
 
+int __cpufreq_update_policy(unsigned int cpu)
+{
+	struct cpufreq_policy *data = cpufreq_cpu_get(cpu);
+	struct cpufreq_policy policy;
+	int ret;
+
+	if (!data) {
+		ret = -ENODEV;
+		goto no_policy;
+	}
+
+	if (unlikely(lock_policy_rwsem_write(cpu))) {
+		ret = -EINVAL;
+		goto fail;
+	}
+
+	pr_debug("updating policy for CPU %u\n", cpu);
+	memcpy(&policy, data, sizeof(struct cpufreq_policy));
+	
+	/* BIOS might change freq behind our back
+	  -> ask driver for current freq and notify governors about a change */
+	if (cpufreq_driver->get) {
+		policy.cur = cpufreq_driver->get(cpu);
+		if (!data->cur) {
+			pr_debug("Driver did not initialize current freq");
+			data->cur = policy.cur;
+		} else {
+			if (data->cur != policy.cur)
+				cpufreq_out_of_sync(cpu, data->cur,
+								policy.cur);
+		}
+	}
+
+	ret = __cpufreq_set_policy(data, &policy);
+
+	unlock_policy_rwsem_write(cpu);
+
+fail:
+	cpufreq_cpu_put(data);
+no_policy:
+	return ret;
+}
+EXPORT_SYMBOL(__cpufreq_update_policy);
+
 static int __cpuinit cpufreq_cpu_callback(struct notifier_block *nfb,
 					unsigned long action, void *hcpu)
 {

@@ -91,9 +91,14 @@ static void omap4_duty_enter_normal(void)
 	state = OMAP4_DUTY_NORMAL;
 	heating_budget = NITRO_P(nitro_percentage, nitro_interval);
 
-	policy->max = nitro_rate;
-	policy->user_policy.max = nitro_rate;
-	cpufreq_update_policy(policy->cpu);
+	if ( nitro_rate <= policy->user_policy.max ) {
+	    policy->max = nitro_rate;
+	}
+	else
+	{
+	    policy->max = policy->user_policy.max;
+	}
+	__cpufreq_update_policy(policy->cpu);
 }
 
 static void omap4_duty_exit_cool_wq(struct work_struct *work)
@@ -118,9 +123,14 @@ static void omap4_duty_enter_cooling(unsigned int next_max,
 	state = next_state;
 	pr_debug("%s enter at (%u)\n", __func__, policy->cur);
 
-	policy->max = next_max;
-	policy->user_policy.max = next_max;
-	cpufreq_update_policy(policy->cpu);
+	if ( next_max <= policy->user_policy.max ) {
+	    policy->max = next_max;
+	}
+	else
+	{
+	    policy->max = policy->user_policy.max;
+	}
+	__cpufreq_update_policy(policy->cpu);
 
 	queue_delayed_work(duty_wq, &work_exit_cool, msecs_to_jiffies(
 		NITRO_P(100 - nitro_percentage, nitro_interval)));
