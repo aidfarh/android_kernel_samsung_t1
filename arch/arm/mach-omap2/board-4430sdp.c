@@ -209,7 +209,7 @@ void keypad_pad_wkup(int enable)
 static struct pcb_section omap4_duty_governor_pcb_sections[] = {
 	{
 		.pcb_temp_level			= 65,
-		.max_opp			= 1200000,
+		.max_opp			= 1350000,
 		.duty_cycle_enabled		= false,
 		.tduty_params = {
 			.nitro_rate		= 0,
@@ -220,10 +220,10 @@ static struct pcb_section omap4_duty_governor_pcb_sections[] = {
 	},
 	{
 		.pcb_temp_level			= 70,
-		.max_opp			= 1200000,
+		.max_opp			= 1350000,
 		.duty_cycle_enabled		= true,
 		.tduty_params = {
-			.nitro_rate		= 1200000,
+			.nitro_rate		= 1350000,
 			.cooling_rate		= 1008000,
 			.nitro_interval		= 20000,
 			.nitro_percentage	= 37,
@@ -231,10 +231,10 @@ static struct pcb_section omap4_duty_governor_pcb_sections[] = {
 	},
 	{
 		.pcb_temp_level			= 75,
-		.max_opp			= 1200000,
+		.max_opp			= 1350000,
 		.duty_cycle_enabled		= true,
 		.tduty_params = {
-			.nitro_rate		= 1200000,
+			.nitro_rate		= 1350000,
 			.cooling_rate		= 1008000,
 			.nitro_interval		= 20000,
 			.nitro_percentage	= 24,
@@ -242,10 +242,10 @@ static struct pcb_section omap4_duty_governor_pcb_sections[] = {
 	},
 	{
 		.pcb_temp_level			= 80,
-		.max_opp			= 1200000,
+		.max_opp			= 1350000,
 		.duty_cycle_enabled		= true,
 		.tduty_params = {
-			.nitro_rate		= 1200000,
+			.nitro_rate		= 1350000,
 			.cooling_rate		= 1008000,
 			.nitro_interval		= 20000,
 			.nitro_percentage	= 19,
